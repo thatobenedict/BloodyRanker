@@ -67,8 +67,6 @@ def fetch_hotel_rates(criteria_search, settings, filter_search):
     }
     response = requests.post(url, headers=headers, json=payload)
     
-    # Debugging: Print the raw response
-    # st.write("API Response:", response.json())
     
     return response.json()
 
@@ -81,7 +79,6 @@ def rank_suppliers(data):
     
     options = data['data']['hotelX']['search']['options']
     hotel_dict = defaultdict(lambda: {'name': '', 'board_codes': defaultdict(list)})
-    
     for option in options:
         hotel_code = option['hotelCode']
         hotel_name = option['hotelName']
@@ -94,7 +91,7 @@ def rank_suppliers(data):
         hotel_dict[hotel_code]['board_codes'][board_code].append({
             'supplierCode': option['supplierCode'],
             'accessCode': option['accessCode'],
-            'netPrice': option['price']['net'],
+            'netPrice': round(option['price']['net'],2),
             'roomDescription': room_descriptions,
             'netCurrency': option['price']['currency']
         })
@@ -114,9 +111,12 @@ client = col1.text_input("Client", value="")
 context = col2.text_input("Context", value="")
 
 # Arrange check-in and check-out inputs on the same row using columns
+today = pd.to_datetime("today").date()
 col3, col4 = st.columns(2)
-check_in = col3.date_input("Check-in Date", value=pd.to_datetime("2024-08-01")).strftime("%Y-%m-%d")
-check_out = col4.date_input("Check-out Date", value=pd.to_datetime("2024-08-03")).strftime("%Y-%m-%d")
+check_in_var = col3.date_input("Check-in Date", value=today + pd.DateOffset(days=1), min_value=today)
+check_in = check_in_var.strftime("%Y-%m-%d")
+check_out = col4.date_input("Check-out Date", value=check_in_var + pd.DateOffset(days=1), min_value=check_in_var + pd.DateOffset(days=1)).strftime("%Y-%m-%d")
+
 
 # User-friendly input for occupancies
 paxes_ages_input = st.text_input("Paxes Ages (comma-separated)", value="30,30")
@@ -169,7 +169,17 @@ filter_search = {
 }
 
 # Button to trigger the search
-if st.button("Search"):
+all_fields_filled = all([
+    client,       # Client must be filled
+    context,      # Context must be filled
+    len(hotels) > 0 and hotels[0] != "",  # At least one hotel must be entered
+    len(access_includes) > 0 and access_includes[0] != ""  # At least one access code must be entered
+])
+
+# Button to trigger the search, disabled if fields are not filled
+search_button = st.button("Search", disabled=not all_fields_filled)
+
+if search_button:
     # Check the number of hotel codes
     if len(hotels) > MAX_HOTEL_CODES:
         st.error(f"Error: You have entered {len(hotels)} hotel codes, but the maximum allowed is {MAX_HOTEL_CODES}.")
